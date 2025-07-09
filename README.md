@@ -1,2 +1,3 @@
 # Quiz-Generator
-Personalized quiz generator using Langchain and Flask
+Personalized quiz generator using Langchain and streamlit
+
