@@ -18,24 +18,21 @@ class QuizManager:
         current_time = time.time()
         return (current_time - self.last_generation_time) >= self.min_generation_interval
 
-    def generate_questions(self, generator, topic, question_type, difficulty, num_question):
+    def generate_questions(self, generator, topic, difficulty, num_question):
         """Generate questions with better error handling and reduced API calls"""
         
-        # Check rate limiting
         if not self.can_generate_new_quiz():
             remaining_time = self.min_generation_interval - (time.time() - self.last_generation_time)
             st.warning(f"Please wait {remaining_time:.1f} seconds before generating a new quiz.")
             return False
 
-        # Reset state
         self.questions = []
         self.user_answers = []
         self.results = []
         self.last_generation_time = time.time()
 
         try:
-            # Reduced retry attempts to save API quota
-            max_attempts = num_question + 2  # Much more conservative
+            max_attempts = num_question + 2 
             attempts = 0
             generated_questions = set()
             
@@ -51,46 +48,32 @@ class QuizManager:
                 status_text.text(f"Generating question {len(self.questions) + 1}/{num_question}...")
                 
                 try:
-                    if question_type == "Multiple Choice":
-                        question = generator.generate_mcq(topic, difficulty.lower())
-                        question_text = question.question.strip().lower()
-                        
-                        if question_text not in generated_questions:
-                            generated_questions.add(question_text)
-                            self.questions.append({
-                                'type': 'MCQ',
-                                'question': question.question,
-                                'options': question.options,
-                                'correct_answer': question.correct_answer
-                            })
-                    else:
-                        question = generator.generate_fill_blank(topic, difficulty.lower())
-                        question_text = question.question.strip().lower()
-                        
-                        if question_text not in generated_questions:
-                            generated_questions.add(question_text)
-                            self.questions.append({
-                                'type': 'Fill in the Blank',
-                                'question': question.question,
-                                'answer': question.answer
-                            })
+                    question = generator.generate_mcq(topic, difficulty.lower())
+                    question_text = question.question.strip().lower()
+                    
+                    if question_text not in generated_questions:
+                        generated_questions.add(question_text)
+                        self.questions.append({
+                            'type': 'MCQ',
+                            'question': question.question,
+                            'options': question.options,
+                            'correct_answer': question.correct_answer
+                        })
                             
                     # Small delay to prevent overwhelming the API
                     time.sleep(0.5)
                     
                 except Exception as gen_error:
                     st.warning(f"Failed to generate question: {gen_error}")
-                    # Don't continue on repeated failures
                     if attempts >= 3:
                         break
                     continue
-                        
-            # Clean up progress indicators
+                    
             progress_bar.empty()
             status_text.empty()
             
             if len(self.questions) < num_question:
-                st.warning(f"Generated {len(self.questions)} unique questions out of {num_question} requested. This helps conserve your API quota.")
+                st.warning(f"Generated {len(self.questions)} unique questions out of {num_question} requested.")
                 
         except Exception as e:
             st.error(f"Error generating questions: {e}")
@@ -112,22 +95,13 @@ class QuizManager:
             st.subheader(f"Question {i + 1}")
             st.write(q['question'])
             
-            if q['type'] == 'MCQ':
-                selected_option = st.radio(
-                    "Choose your answer:",
-                    q['options'],
-                    key=f"mcq_{i}",
-                    index=None if self.user_answers[i] is None else q['options'].index(self.user_answers[i]) if self.user_answers[i] in q['options'] else None
-                )
-                self.user_answers[i] = selected_option
-                
-            else:
-                user_input = st.text_input(
-                    "Enter your answer:",
-                    value=self.user_answers[i] if self.user_answers[i] is not None else "",
-                    key=f"fill_{i}"
-                )
-                self.user_answers[i] = user_input
+            selected_option = st.radio(
+                "Choose your answer:",
+                q['options'],
+                key=f"mcq_{i}",
+                index=None if self.user_answers[i] is None else q['options'].index(self.user_answers[i]) if self.user_answers[i] in q['options'] else None
+            )
+            self.user_answers[i] = selected_option
             
             st.divider()
         
@@ -141,26 +115,15 @@ class QuizManager:
         score = 0
         
         for i, (question, user_answer) in enumerate(zip(self.questions, self.user_answers)):
-            if question['type'] == 'MCQ':
-                correct = user_answer == question['correct_answer']
-                self.results.append({
-                    'question_num': i + 1,
-                    'question': question['question'],
-                    'user_answer': user_answer,
-                    'correct_answer': question['correct_answer'],
-                    'correct': correct,
-                    'type': 'MCQ'
-                })
-            else:
-                correct = user_answer.lower().strip() == question['answer'].lower().strip() if user_answer else False
-                self.results.append({
-                    'question_num': i + 1,
-                    'question': question['question'],
-                    'user_answer': user_answer,
-                    'correct_answer': question['answer'],
-                    'correct': correct,
-                    'type': 'Fill in the Blank'
-                })
+            correct = user_answer == question['correct_answer']
+            self.results.append({
+                'question_num': i + 1,
+                'question': question['question'],
+                'user_answer': user_answer,
+                'correct_answer': question['correct_answer'],
+                'correct': correct,
+                'type': 'MCQ'
+            })
             
             if correct:
                 score += 1
@@ -203,9 +166,9 @@ class QuizManager:
                 else:
                     st.error("Incorrect ❌")
 
-    def save_quiz_to_cache(self, topic, question_type, difficulty):
+    def save_quiz_to_cache(self, topic, difficulty):
         """Save generated quiz to session state cache"""
-        cache_key = f"{topic}_{question_type}_{difficulty}"
+        cache_key = f"{topic}_{difficulty}"
         if 'quiz_cache' not in st.session_state:
             st.session_state.quiz_cache = {}
         
@@ -214,9 +177,9 @@ class QuizManager:
             'timestamp': time.time()
         }
 
-    def load_quiz_from_cache(self, topic, question_type, difficulty):
+    def load_quiz_from_cache(self, topic, difficulty):
         """Load quiz from cache if available and recent"""
-        cache_key = f"{topic}_{question_type}_{difficulty}"
+        cache_key = f"{topic}_{difficulty}"
         if 'quiz_cache' not in st.session_state:
             return False
         
@@ -236,11 +199,12 @@ def main():
     st.set_page_config(
         page_title="AI Quiz Generator",
         page_icon="🧠",
-        layout="wide"
+        layout="wide",
+        initial_sidebar_state="expanded"
     )
     
     st.title("🧠 AI Quiz Generator")
-    st.markdown("Generate and take quizzes on any topic using AI! (Optimized for API efficiency)")
+    st.markdown("Generate and take multiple choice quizzes on any topic using AI!")
     
     # Initialize session state
     if 'quiz_manager' not in st.session_state:
@@ -252,51 +216,56 @@ def main():
     if 'quiz_submitted' not in st.session_state:
         st.session_state.quiz_submitted = False
     
-    # API Usage Warning
-    st.info("💡 **API Usage Optimization**: This app now includes rate limiting and caching to preserve your API quota.")
-    
+    # Enhanced sidebar with increased width
     with st.sidebar:
-        st.header("⚙️ Quiz Configuration")
+        st.markdown("## ⚙️ Quiz Configuration")
         
         if not os.getenv("GOOGLE_API_KEY"):
             st.error("Please set your GOOGLE_API_KEY in the .env file")
             st.stop()
         
-        topic = st.text_input("Enter Topic:", placeholder="e.g., Python Programming, World History")
-        
-        question_type = st.selectbox(
-            "Question Type:",
-            ["Multiple Choice", "Fill in the Blank"]
+        st.markdown("### 📚 Topic Selection")
+        topic = st.text_input(
+            "Enter Quiz Topic:",
+            placeholder="e.g., Python Programming, World History, Science",
+            help="Enter any topic you want to be quizzed on"
         )
         
+        st.markdown("### 🎯 Difficulty Level")
         difficulty = st.selectbox(
-            "Difficulty Level:",
-            ["Easy", "Medium", "Hard"]
+            "Select Difficulty:",
+            ["Easy", "Medium", "Hard"],
+            help="Choose the difficulty level for your quiz questions"
         )
         
+        st.markdown("### 🔢 Number of Questions")
         num_questions = st.slider(
-            "Number of Questions:",
+            "Questions to Generate:",
             min_value=1,
-            max_value=5,  # Reduced max to save API quota
-            value=3
+            max_value=10,
+            value=5,
+            help="Select how many questions you want in your quiz"
         )
+        
+        st.markdown("---")
         
         # Check if we can generate
         can_generate = st.session_state.quiz_manager.can_generate_new_quiz()
         
         if not can_generate:
             remaining_time = st.session_state.quiz_manager.min_generation_interval - (time.time() - st.session_state.quiz_manager.last_generation_time)
-            st.warning(f"Rate limit: Wait {remaining_time:.1f}s")
+            st.warning(f"⏱️ Rate limit: Wait {remaining_time:.1f}s")
         
-        if st.button("🎯 Generate Quiz", type="primary", disabled=not can_generate):
+        st.markdown("### 🚀 Generate Quiz")
+        if st.button("🎯 Generate Quiz", type="primary", disabled=not can_generate, use_container_width=True):
             if not topic:
                 st.error("Please enter a topic!")
             else:
                 # Check cache first
-                if st.session_state.quiz_manager.load_quiz_from_cache(topic, question_type, difficulty):
+                if st.session_state.quiz_manager.load_quiz_from_cache(topic, difficulty):
                     st.session_state.quiz_generated = True
                     st.session_state.quiz_submitted = False
-                    st.success("Quiz loaded from cache! (No API call made)")
+                    st.success("Quiz loaded from cache!")
                     st.rerun()
                 else:
                     # Generate new quiz
@@ -304,11 +273,11 @@ def main():
                         try:
                             generator = QuestionGenerator()
                             success = st.session_state.quiz_manager.generate_questions(
-                                generator, topic, question_type, difficulty, num_questions
+                                generator, topic, difficulty, num_questions
                             )
                             
                             if success:
-                                st.session_state.quiz_manager.save_quiz_to_cache(topic, question_type, difficulty)
+                                st.session_state.quiz_manager.save_quiz_to_cache(topic, difficulty)
                                 st.session_state.quiz_generated = True
                                 st.session_state.quiz_submitted = False
                                 st.success("Quiz generated successfully!")
@@ -318,32 +287,49 @@ def main():
                         except Exception as e:
                             st.error(f"Error: {str(e)}")
         
-        if st.button("🔄 Reset Quiz"):
+        st.markdown("### 🔄 Reset")
+        if st.button("🔄 Reset Quiz", use_container_width=True):
             st.session_state.quiz_manager = QuizManager()
             st.session_state.quiz_generated = False
             st.session_state.quiz_submitted = False
             st.rerun()
+        
+        st.markdown("---")
+        st.markdown("### ℹ️ About")
+        st.markdown("""
+        This quiz generator uses AI to create personalized multiple choice questions on any topic.
+        
+        **Features:**
+        - ✅ Multiple choice questions
+        - ✅ Adjustable difficulty
+        - ✅ Instant scoring
+        - ✅ Detailed results
+        """)
     
     # Main content area
     if not st.session_state.quiz_generated:
         st.info("👈 Configure your quiz settings in the sidebar and click 'Generate Quiz' to start!")
-    
-        st.markdown("""
-        ### 🚀 Optimized Features:
-        - **Rate Limiting**: Prevents excessive API calls
-        - **Caching**: Reuses recent quizzes to save API quota
-        - **Conservative Retries**: Reduces failed generation attempts
-        - **Progress Tracking**: Shows generation progress
-        - **Smart Delays**: Prevents API overwhelming
         
-        ### How to use:
-        1. **Enter a topic** you want to be quizzed on
-        2. **Choose question type** (Multiple Choice or Fill in the Blank)
-        3. **Select difficulty level** (Easy, Medium, or Hard)
-        4. **Set number of questions** (1-5, reduced to save quota)
-        5. **Click 'Generate Quiz'** to create your personalized quiz
-        6. **Answer the questions** and submit to see your results!
-        """)
+        # Clean, minimal welcome section
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.markdown("""
+            ### 🎯 How to Use
+            1. **Enter a topic** in the sidebar
+            2. **Select difficulty** (Easy, Medium, Hard)
+            3. **Choose number of questions** (1-10)
+            4. **Click 'Generate Quiz'** to create your quiz
+            5. **Answer questions** and submit for results
+            """)
+        
+        with col2:
+            st.markdown("""
+            ### 📊 Features
+            - AI-powered questions
+            - Instant feedback
+            - Score tracking
+            - Multiple difficulty levels
+            """)
     
     elif not st.session_state.quiz_submitted:
         st.session_state.quiz_manager.attempt_quiz()
@@ -352,13 +338,9 @@ def main():
         with col2:
             if st.button("📤 Submit Quiz", type="primary", use_container_width=True):
                 unanswered = []
-                for i, (question, answer) in enumerate(zip(st.session_state.quiz_manager.questions, st.session_state.quiz_manager.user_answers)):
-                    if question['type'] == 'MCQ':
-                        if answer is None:
-                            unanswered.append(i + 1)
-                    else:
-                        if not answer or answer.strip() == "":
-                            unanswered.append(i + 1)
+                for i, answer in enumerate(st.session_state.quiz_manager.user_answers):
+                    if answer is None:
+                        unanswered.append(i + 1)
                 
                 if unanswered:
                     st.warning(f"Please answer all questions! Missing: {', '.join(map(str, unanswered))}")
