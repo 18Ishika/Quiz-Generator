@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+
+{% block title %}Quiz Report - {{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 style="margin-bottom: 1rem; color: #2c3e50;">📊 Quiz Report</h2>
+    <h3 style="margin-bottom: 2rem; color: #555;">{{ quiz.title }}</h3>
+
+    <div style="background-color: #e8f4f8; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+        <h4 style="margin-bottom: 1rem;">Quiz Information</h4>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+            <div>
+                <strong>Topic:</strong> {{ quiz.topic }}
+            </div>
+            <div>
+                <strong>Difficulty:</strong> <span style="text-transform: capitalize;">{{ quiz.difficulty }}</span>
+            </div>
+            <div>
+                <strong>Questions:</strong> {{ quiz.questions|length }}
+            </div>
+            <div>
+                <strong>Created:</strong> {{ quiz.created_at.strftime('%b %d, %Y') }}
+            </div>
+        </div>
+    </div>
+
+    <div style="background-color: #f8f9fa; padding: 2rem; border-radius: 8px; margin-bottom: 2rem;">
+        <h4 style="margin-bottom: 1.5rem; text-align: center;">Overall Statistics</h4>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem;">
+            <div style="text-align: center;">
+                <div style="font-size: 3rem; font-weight: bold; color: #3498db;">
+                    {{ total_attempts }}
+                </div>
+                <div style="color: #666; margin-top: 0.5rem;">Total Attempts</div>
+            </div>
+            
+            <div style="text-align: center;">
+                <div style="font-size: 3rem; font-weight: bold; 
+                    {% if avg_percentage >= 80 %}color: #27ae60;
+                    {% elif avg_percentage >= 60 %}color: #f39c12;
+                    {% else %}color: #e74c3c;{% endif %}">
+                    {{ "%.1f"|format(avg_percentage) }}%
+                </div>
+                <div style="color: #666; margin-top: 0.5rem;">Average Score</div>
+            </div>
+
+            {% if attempts|length > 0 %}
+            <div style="text-align: center;">
+                <div style="font-size: 3rem; font-weight: bold; color: #27ae60;">
+                    {{ attempts|selectattr('score', 'eq', quiz.questions|length)|list|length }}
+                </div>
+                <div style="color: #666; margin-top: 0.5rem;">Perfect Scores</div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div style="margin-bottom: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="{{ url_for('take_quiz', share_link=quiz.share_link) }}" class="btn btn-primary">
+            ✏️ Take Quiz
+        </a>
+        <button onclick="copyQuizLink('{{ request.host_url }}quiz/{{ quiz.share_link }}')" class="btn btn-secondary">
+            📋 Copy Quiz Link
+        </button>
+        <a href="{{ url_for('my_quizzes') }}" class="btn btn-secondary">
+            ← Back to My Quizzes
+        </a>
+    </div>
+
+    <h3 style="margin-bottom: 1rem;">Student Attempts</h3>
+
+    {% if attempts|length == 0 %}
+    <div style="text-align: center; padding: 3rem; background-color: #f8f9fa; border-radius: 8px;">
+        <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+        <h4 style="margin-bottom: 0.5rem; color: #555;">No Attempts Yet</h4>
+        <p style="color: #777;">
+            No students have taken this quiz yet. Share the quiz link with your students!
+        </p>
+    </div>
+    {% else %}
+    <div style="overflow-x: auto;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Student Name</th>
+                    <th>Email</th>
+                    <th>Score</th>
+                    <th>Percentage</th>
+                    <th>Completed At</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for attempt in attempts %}
+                <tr>
+                    <td style="font-weight: 500;">{{ attempt.student_name }}</td>
+                    <td>{{ attempt.student_email if attempt.student_email else '-' }}</td>
+                    <td>{{ attempt.score }}/{{ attempt.total_questions }}</td>
+                    <td>
+                        <span style="padding: 0.25rem 0.75rem; border-radius: 4px; font-weight: 500;
+                            {% set percentage = (attempt.score / attempt.total_questions * 100) %}
+                            {% if percentage >= 80 %}background-color: #d4edda; color: #155724;
+                            {% elif percentage >= 60 %}background-color: #fff3cd; color: #856404;
+                            {% else %}background-color: #f8d7da; color: #721c24;{% endif %}">
+                            {{ "%.1f"|format(percentage) }}%
+                        </span>
+                    </td>
+                    <td>{{ attempt.completed_at.strftime('%b %d, %Y %I:%M %p') }}</td>
+                    <td>
+                        <a href="{{ url_for('quiz_results', attempt_id=attempt.id) }}" 
+                           class="btn btn-primary" 
+                           style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                            View Details
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div style="margin-top: 2rem; padding: 1.5rem; background-color: #f8f9fa; border-radius: 8px;">
+        <h4 style="margin-bottom: 1rem;">Score Distribution</h4>
+        <div style="display: flex; gap: 1rem; align-items: end; height: 200px; padding: 1rem 0;">
+            {% set pass_count = attempts|selectattr('score', 'ge', (quiz.questions|length * 0.6))|list|length %}
+            {% set fail_count = attempts|length - pass_count %}
+            
+            <div style="flex: 1; text-align: center;">
+                <div style="background-color: #27ae60; height: {{ (pass_count / attempts|length * 180) if attempts|length > 0 else 0 }}px; border-radius: 4px 4px 0 0; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; min-height: 40px;">
+                    {{ pass_count }}
+                </div>
+                <div style="margin-top: 0.5rem; font-weight: 500;">Pass (≥60%)</div>
+            </div>
+            
+            <div style="flex: 1; text-align: center;">
+                <div style="background-color: #e74c3c; height: {{ (fail_count / attempts|length * 180) if attempts|length > 0 else 0 }}px; border-radius: 4px 4px 0 0; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; min-height: 40px;">
+                    {{ fail_count }}
+                </div>
+                <div style="margin-top: 0.5rem; font-weight: 500;">Fail (<60%)</div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div id="copy-notification" style="
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background-color: #27ae60;
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: none;
+    z-index: 1000;
+">
+    ✅ Quiz link copied to clipboard!
+</div>
+
+<script>
+    function copyQuizLink(url) {
+        navigator.clipboard.writeText(url).then(function() {
+            const notification = document.getElementById('copy-notification');
+            notification.style.display = 'block';
+            setTimeout(function() {
+                notification.style.display = 'none';
+            }, 3000);
+        }).catch(function(err) {
+            alert('Failed to copy link: ' + err);
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}My Quizzes{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h2 style="color: #2c3e50;">My Quizzes</h2>
+        <a href="{{ url_for('create_quiz') }}" class="btn btn-primary">➕ Create New Quiz</a>
+    </div>
+
+    {% if quizzes|length == 0 %}
+    <div style="text-align: center; padding: 3rem; background-color: #f8f9fa; border-radius: 8px;">
+        <div style="font-size: 4rem; margin-bottom: 1rem;">📝</div>
+        <h3 style="margin-bottom: 1rem; color: #555;">No Quizzes Yet</h3>
+        <p style="color: #777; margin-bottom: 2rem;">
+            You haven't created any quizzes yet. Get started by creating your first quiz!
+        </p>
+        <a href="{{ url_for('create_quiz') }}" class="btn btn-primary">Create Your First Quiz</a>
+    </div>
+    {% else %}
+    <div style="display: grid; gap: 1.5rem;">
+        {% for quiz in quizzes %}
+        <div style="border: 1px solid #ddd; border-radius: 8px; padding: 1.5rem; background-color: #fff; transition: box-shadow 0.3s;">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                <div style="flex: 1;">
+                    <h3 style="margin-bottom: 0.5rem; color: #2c3e50;">{{ quiz.title }}</h3>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.9rem; color: #666;">
+                        <span>📚 {{ quiz.topic }}</span>
+                        <span>📊 {{ quiz.difficulty|capitalize }}</span>
+                        <span>❓ {{ quiz.questions|length }} questions</span>
+                        <span>👥 {{ quiz.attempts|length }} attempts</span>
+                    </div>
+                </div>
+                
+                <form method="POST" action="{{ url_for('delete_quiz', quiz_id=quiz.id) }}" 
+                      onsubmit="return confirm('Are you sure you want to delete this quiz? This action cannot be undone.');"
+                      style="margin-left: 1rem;">
+                    <button type="submit" class="btn btn-danger" style="padding: 0.5rem 1rem;">
+                        🗑️ Delete
+                    </button>
+                </form>
+            </div>
+
+            <div style="font-size: 0.85rem; color: #999; margin-bottom: 1rem;">
+                Created on {{ quiz.created_at.strftime('%B %d, %Y at %I:%M %p') }}
+            </div>
+
+            {% if quiz.attempts|length > 0 %}
+            <div style="background-color: #f8f9fa; padding: 1rem; border-radius: 4px; margin-bottom: 1rem;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+                    <div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: #3498db;">
+                            {{ quiz.attempts|length }}
+                        </div>
+                        <div style="font-size: 0.85rem; color: #666;">Total Attempts</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: #27ae60;">
+                            {{ "%.1f"|format((quiz.attempts|sum(attribute='score') / quiz.attempts|length / quiz.questions|length * 100)) }}%
+                        </div>
+                        <div style="font-size: 0.85rem; color: #666;">Average Score</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <a href="{{ url_for('quiz_report', share_link=quiz.share_link) }}" class="btn btn-primary">
+                    📊 View Report
+                </a>
+                <a href="{{ url_for('take_quiz', share_link=quiz.share_link) }}" class="btn btn-secondary">
+                    ✏️ Take Quiz
+                </a>
+                <button onclick="copyQuizLink('{{ request.host_url }}quiz/{{ quiz.share_link }}')" class="btn btn-secondary">
+                    📋 Copy Link
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<div id="copy-notification" style="
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    background-color: #27ae60;
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: none;
+    z-index: 1000;
+">
+    ✅ Quiz link copied to clipboard!
+</div>
+
+<script>
+    function copyQuizLink(url) {
+        navigator.clipboard.writeText(url).then(function() {
+            const notification = document.getElementById('copy-notification');
+            notification.style.display = 'block';
+            setTimeout(function() {
+                notification.style.display = 'none';
+            }, 3000);
+        }).catch(function(err) {
+            alert('Failed to copy link: ' + err);
+        });
+    }
+</script>
+{% endblock %}

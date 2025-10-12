@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}{{ quiz.title }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 style="margin-bottom: 1rem; color: #2c3e50;">{{ quiz.title }}</h2>
+    
+    <div style="background-color: #e8f4f8; padding: 1rem; border-radius: 8px; margin-bottom: 2rem;">
+        <p><strong>Topic:</strong> {{ quiz.topic }}</p>
+        <p><strong>Difficulty:</strong> <span style="text-transform: capitalize;">{{ quiz.difficulty }}</span></p>
+        <p><strong>Questions:</strong> {{ quiz.questions|length }}</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('take_quiz', share_link=quiz.share_link) }}" id="quizForm">
+        <div style="background-color: #fff3cd; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+            <h3 style="margin-bottom: 1rem; color: #856404;">Student Information</h3>
+            
+            <div class="form-group">
+                <label for="student_name">Your Name *</label>
+                <input type="text" id="student_name" name="student_name" required placeholder="Enter your full name">
+            </div>
+
+            <div class="form-group">
+                <label for="student_email">Email (Optional)</label>
+                <input type="email" id="student_email" name="student_email" placeholder="your.email@example.com">
+            </div>
+        </div>
+
+        <h3 style="margin-bottom: 1.5rem;">Quiz Questions</h3>
+
+        {% for question in quiz.questions %}
+        {% set q_index = loop.index0 %}
+        <div style="margin-bottom: 2rem; padding: 1.5rem; background-color: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
+            <h4 style="margin-bottom: 1rem; color: #2c3e50;">
+                Question {{ loop.index }} of {{ quiz.questions|length }}
+            </h4>
+            <p style="font-size: 1.1rem; margin-bottom: 1rem; font-weight: 500;">
+                {{ question.question }}
+            </p>
+
+            <div style="margin-left: 1rem;">
+                {% for option in question.options %}
+                <div style="margin-bottom: 0.75rem;">
+                    <label style="display: flex; align-items: center; cursor: pointer; padding: 0.75rem; border-radius: 4px; transition: background-color 0.2s;" 
+                           class="option-label">
+                        <input 
+                            type="radio" 
+                            name="question_{{ q_index }}" 
+                            value="{{ option }}" 
+                            required
+                            style="margin-right: 0.75rem; cursor: pointer;"
+                        >
+                        <span>{{ option }}</span>
+                    </label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <div style="margin-top: 2rem; padding: 1.5rem; background-color: #d1ecf1; border-radius: 8px; text-align: center;">
+            <p style="margin-bottom: 1rem; color: #0c5460;">
+                ⚠️ Make sure you've answered all questions before submitting!
+            </p>
+            <button type="submit" class="btn btn-primary" id="submitBtn" style="font-size: 1.1rem; padding: 1rem 2rem;">
+                Submit Quiz
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+    .option-label:hover {
+        background-color: #e9ecef;
+    }
+    
+    .option-label input[type="radio"]:checked + span {
+        font-weight: 600;
+        color: #3498db;
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('quizForm');
+    const submitBtn = document.getElementById('submitBtn');
+    
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        if (submitBtn.disabled) return;
+        
+        const studentName = document.getElementById('student_name').value.trim();
+        if (!studentName) {
+            alert('Please enter your name!');
+            document.getElementById('student_name').focus();
+            return;
+        }
+        
+        const totalQuestions = {{ quiz.questions|length }};
+        let unanswered = [];
+        
+        for (let i = 0; i < totalQuestions; i++) {
+            const radios = document.querySelectorAll('input[name="question_' + i + '"]');
+            let answered = false;
+            
+            radios.forEach(function(radio) {
+                if (radio.checked) answered = true;
+            });
+            
+            if (!answered) {
+                unanswered.push(i + 1);
+            }
+        }
+        
+        if (unanswered.length > 0) {
+            alert('Please answer all questions!\n\nUnanswered: Question ' + unanswered.join(', '));
+            return;
+        }
+        
+        if (!confirm('Submit your quiz now?\n\nYou cannot change answers after submission.')) {
+            return;
+        }
+        
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Submitting...';
+        form.submit();
+    });
+});
+</script>
+{% endblock %}

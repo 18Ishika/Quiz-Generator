@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Quiz Results{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 style="margin-bottom: 2rem; color: #2c3e50;">🎯 Quiz Results</h2>
+
+    <div style="background-color: #f8f9fa; padding: 2rem; border-radius: 8px; text-align: center; margin-bottom: 2rem;">
+        <h3 style="margin-bottom: 1rem; color: #555;">{{ attempt.student_name }}</h3>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+            <div>
+                <div style="font-size: 2.5rem; font-weight: bold; color: #3498db;">
+                    {{ attempt.score }}/{{ attempt.total_questions }}
+                </div>
+                <div style="color: #777; margin-top: 0.5rem;">Score</div>
+            </div>
+            
+            <div>
+                <div style="font-size: 2.5rem; font-weight: bold; 
+                    {% if percentage >= 80 %}color: #27ae60;
+                    {% elif percentage >= 60 %}color: #f39c12;
+                    {% else %}color: #e74c3c;{% endif %}">
+                    {{ "%.1f"|format(percentage) }}%
+                </div>
+                <div style="color: #777; margin-top: 0.5rem;">Percentage</div>
+            </div>
+        </div>
+
+        <div style="margin-top: 2rem; padding: 1rem; border-radius: 8px; font-size: 1.1rem;
+            {% if percentage >= 80 %}background-color: #d4edda; color: #155724;
+            {% elif percentage >= 60 %}background-color: #fff3cd; color: #856404;
+            {% else %}background-color: #f8d7da; color: #721c24;{% endif %}">
+            {% if percentage >= 80 %}
+                🎉 Excellent work! You've mastered this topic!
+            {% elif percentage >= 60 %}
+                👍 Good job! Keep practicing to improve further.
+            {% else %}
+                💪 Keep studying! Practice makes perfect.
+            {% endif %}
+        </div>
+    </div>
+
+    <h3 style="margin-bottom: 1.5rem; color: #2c3e50;">Answer Review</h3>
+
+    {% for answer in attempt.answers %}
+    <div style="margin-bottom: 2rem; padding: 1.5rem; border-left: 4px solid 
+        {% if answer.is_correct %}#27ae60{% else %}#e74c3c{% endif %}; 
+        background-color: #f8f9fa; border-radius: 8px;">
+        
+        <div style="display: flex; align-items: flex-start; margin-bottom: 1rem;">
+            <span style="font-size: 1.5rem; margin-right: 1rem; flex-shrink: 0;">
+                {% if answer.is_correct %}✅{% else %}❌{% endif %}
+            </span>
+            <div style="flex: 1;">
+                <h4 style="margin: 0 0 0.5rem 0; color: #2c3e50;">Question {{ loop.index }}</h4>
+                <p style="margin: 0; font-size: 1rem; color: #555;">{{ answer.question }}</p>
+            </div>
+        </div>
+
+        <div style="margin-left: 2.5rem;">
+            <p style="margin-bottom: 0.5rem;">
+                <strong>Your Answer:</strong> 
+                <span style="{% if answer.is_correct %}color: #27ae60;{% else %}color: #e74c3c;{% endif %}">
+                    {{ answer.user_answer if answer.user_answer else 'Not answered' }}
+                </span>
+            </p>
+            
+            {% if not answer.is_correct %}
+            <p style="margin-bottom: 0;">
+                <strong>Correct Answer:</strong> 
+                <span style="color: #27ae60;">{{ answer.correct_answer }}</span>
+            </p>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <div style="margin-top: 2rem; text-align: center;">
+        <a href="{{ url_for('index') }}" class="btn btn-primary">Back to Home</a>
+    </div>
+</div>
+
+<style>
+    @media print {
+        .btn {
+            display: none;
+        }
+    }
+</style>
+{% endblock %}

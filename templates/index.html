@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Home - AI Quiz Generator{% endblock %}
+
+{% block content %}
+<div class="card text-center">
+    <h2 style="margin-bottom: 1rem; color: #2c3e50;">Welcome to AI Quiz Generator</h2>
+    <p style="font-size: 1.2rem; color: #555; margin-bottom: 3rem;">
+        Create intelligent quizzes powered by AI in seconds!
+    </p>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem; margin-top: 2rem;">
+        <div style="padding: 2rem; background-color: #f8f9fa; border-radius: 8px;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">📝</div>
+            <h3 style="margin-bottom: 1rem; color: #3498db;">Create Quiz</h3>
+            <p style="color: #666; margin-bottom: 1.5rem;">
+                Generate custom quizzes on any topic with AI-powered questions
+            </p>
+            <a href="{{ url_for('create_quiz') }}" class="btn btn-primary">Get Started</a>
+        </div>
+
+        <div style="padding: 2rem; background-color: #f8f9fa; border-radius: 8px;">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">📊</div>
+            <h3 style="margin-bottom: 1rem; color: #3498db;">My Quizzes</h3>
+            <p style="color: #666; margin-bottom: 1.5rem;">
+                View and manage all your created quizzes and track student performance
+            </p>
+            <a href="{{ url_for('my_quizzes') }}" class="btn btn-secondary">View Quizzes</a>
+        </div>
+    </div>
+
+    <div style="margin-top: 3rem; padding: 2rem; background-color: #e8f4f8; border-radius: 8px;">
+        <h3 style="margin-bottom: 1rem; color: #2c3e50;">How It Works</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-top: 2rem;">
+            <div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">1️⃣</div>
+                <strong>Choose Topic</strong>
+                <p style="color: #666; font-size: 0.9rem;">Select any subject you want</p>
+            </div>
+            <div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">2️⃣</div>
+                <strong>Generate Quiz</strong>
+                <p style="color: #666; font-size: 0.9rem;">AI creates unique questions</p>
+            </div>
+            <div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">3️⃣</div>
+                <strong>Share Link</strong>
+                <p style="color: #666; font-size: 0.9rem;">Send to your students</p>
+            </div>
+            <div>
+                <div style="font-size: 2rem; margin-bottom: 0.5rem;">4️⃣</div>
+                <strong>Track Results</strong>
+                <p style="color: #666; font-size: 0.9rem;">Monitor performance</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

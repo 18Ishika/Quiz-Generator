@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Quiz Created Successfully{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="alert alert-success">
+        <strong>✅ Success!</strong> Your quiz has been created successfully!
+    </div>
+
+    <h2 style="margin-bottom: 2rem; color: #2c3e50;">{{ quiz.title }}</h2>
+
+    <div style="background-color: #f8f9fa; padding: 2rem; border-radius: 8px; margin-bottom: 2rem;">
+        <h3 style="margin-bottom: 1rem;">Quiz Details</h3>
+        <p><strong>Topic:</strong> {{ quiz.topic }}</p>
+        <p><strong>Difficulty:</strong> <span style="text-transform: capitalize;">{{ quiz.difficulty }}</span></p>
+        <p><strong>Number of Questions:</strong> {{ quiz.questions|length }}</p>
+        <p><strong>Created:</strong> {{ quiz.created_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
+    </div>
+
+    <div style="background-color: #e8f4f8; padding: 2rem; border-radius: 8px; margin-bottom: 2rem;">
+        <h3 style="margin-bottom: 1rem;">Share This Quiz</h3>
+        <p style="margin-bottom: 1rem; color: #555;">
+            Share this link with your students to let them take the quiz:
+        </p>
+        
+        <div style="display: flex; gap: 1rem; align-items: center;">
+            <input 
+                type="text" 
+                id="quiz-url" 
+                value="{{ quiz_url }}" 
+                readonly 
+                style="flex: 1; padding: 0.75rem; border: 2px solid #3498db; border-radius: 4px; font-family: monospace;"
+            >
+            <button 
+                onclick="copyLink()" 
+                class="btn btn-primary"
+                style="white-space: nowrap;"
+            >
+                📋 Copy Link
+            </button>
+        </div>
+
+        <div id="copy-message" style="margin-top: 1rem; color: #27ae60; font-weight: 500; display: none;">
+            ✅ Link copied to clipboard!
+        </div>
+    </div>
+
+    <h3 style="margin-bottom: 1rem;">Questions Preview</h3>
+    <div style="background-color: #f8f9fa; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
+        {% for question in quiz.questions %}
+        <div style="margin-bottom: 1.5rem; padding-bottom: 1.5rem; {% if not loop.last %}border-bottom: 1px solid #ddd;{% endif %}">
+            <p style="font-weight: 600; margin-bottom: 0.5rem;">{{ loop.index }}. {{ question.question }}</p>
+            <ul style="list-style: none; margin-left: 1rem;">
+                {% for option in question.options %}
+                <li style="padding: 0.25rem 0; {% if option == question.correct_answer %}color: #27ae60; font-weight: 500;{% endif %}">
+                    {{ option }} {% if option == question.correct_answer %}✓{% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div style="margin-top: 2rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="{{ url_for('quiz_report', share_link=quiz.share_link) }}" class="btn btn-primary">
+            View Reports
+        </a>
+        <a href="{{ url_for('take_quiz', share_link=quiz.share_link) }}" class="btn btn-secondary">
+            Take Quiz
+        </a>
+        <a href="{{ url_for('create_quiz') }}" class="btn btn-secondary">
+            Create Another Quiz
+        </a>
+        <a href="{{ url_for('my_quizzes') }}" class="btn btn-secondary">
+            My Quizzes
+        </a>
+    </div>
+</div>
+
+<script>
+    function copyLink() {
+        const urlInput = document.getElementById('quiz-url');
+        urlInput.select();
+        urlInput.setSelectionRange(0, 99999);
+        
+        navigator.clipboard.writeText(urlInput.value).then(function() {
+            const message = document.getElementById('copy-message');
+            message.style.display = 'block';
+            setTimeout(function() {
+                message.style.display = 'none';
+            }, 3000);
+        });
+    }
+</script>
+{% endblock %}

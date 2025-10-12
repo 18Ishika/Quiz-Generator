@@ -1,369 +1,204 @@
-import streamlit as st
-import pandas as pd
-import json
-import time
-from generator import QuestionGenerator
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+import secrets
 import os
+import re
+from dotenv import load_dotenv
+from generator import QuestionGenerator
 
-class QuizManager:
-    def __init__(self):
-        self.questions = []
-        self.user_answers = []
-        self.results = []
-        self.last_generation_time = 0
-        self.min_generation_interval = 5  # Minimum 5 seconds between generations
+load_dotenv()
 
-    def can_generate_new_quiz(self):
-        """Prevent rapid-fire API calls"""
-        current_time = time.time()
-        return (current_time - self.last_generation_time) >= self.min_generation_interval
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', secrets.token_hex(16))
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///quiz.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-    def generate_questions(self, generator, topic, difficulty, num_question):
-        """Generate questions with better error handling and reduced API calls"""
+db = SQLAlchemy(app)
+
+# Database Models
+class Quiz(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    topic = db.Column(db.String(100), nullable=False)
+    difficulty = db.Column(db.String(20), nullable=False)
+    share_link = db.Column(db.String(50), unique=True, nullable=False)
+    questions = db.Column(db.JSON, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    attempts = db.relationship('QuizAttempt', backref='quiz', lazy=True, cascade='all, delete-orphan')
+
+class QuizAttempt(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    quiz_id = db.Column(db.Integer, db.ForeignKey('quiz.id'), nullable=False)
+    student_name = db.Column(db.String(100), nullable=False)
+    student_email = db.Column(db.String(100))
+    score = db.Column(db.Integer, nullable=False)
+    total_questions = db.Column(db.Integer, nullable=False)
+    answers = db.Column(db.JSON, nullable=False)
+    completed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+# Initialize database
+with app.app_context():
+    db.create_all()
+
+def normalize_answer(answer):
+    """Normalize answer for comparison by removing extra whitespace and converting to lowercase"""
+    if not answer:
+        return ''
+    # Convert to string, strip, and lowercase
+    answer = str(answer).strip().lower()
+    # Replace multiple spaces with single space
+    answer = re.sub(r'\s+', ' ', answer)
+    return answer
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/create-quiz', methods=['GET', 'POST'])
+def create_quiz():
+    if request.method == 'POST':
+        topic = request.form.get('topic')
+        difficulty = request.form.get('difficulty', 'medium')
+        num_questions = int(request.form.get('num_questions', 5))
+        title = request.form.get('title', f"{topic} Quiz")
         
-        if not self.can_generate_new_quiz():
-            remaining_time = self.min_generation_interval - (time.time() - self.last_generation_time)
-            st.warning(f"Please wait {remaining_time:.1f} seconds before generating a new quiz.")
-            return False
-
-        self.questions = []
-        self.user_answers = []
-        self.results = []
-        self.last_generation_time = time.time()
-
         try:
-            max_attempts = num_question + 2 
-            attempts = 0
-            generated_questions = set()
+            generator = QuestionGenerator()
+            questions = []
             
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+            for _ in range(num_questions):
+                q = generator.generate_mcq(topic, difficulty.lower())
+                questions.append({
+                    'question': q.question,
+                    'options': q.options,
+                    'correct_answer': q.correct_answer
+                })
             
-            while len(self.questions) < num_question and attempts < max_attempts:
-                attempts += 1
-                
-                # Update progress
-                progress = len(self.questions) / num_question
-                progress_bar.progress(progress)
-                status_text.text(f"Generating question {len(self.questions) + 1}/{num_question}...")
-                
-                try:
-                    question = generator.generate_mcq(topic, difficulty.lower())
-                    question_text = question.question.strip().lower()
-                    
-                    if question_text not in generated_questions:
-                        generated_questions.add(question_text)
-                        self.questions.append({
-                            'type': 'MCQ',
-                            'question': question.question,
-                            'options': question.options,
-                            'correct_answer': question.correct_answer
-                        })
-                            
-                    # Small delay to prevent overwhelming the API
-                    time.sleep(0.5)
-                    
-                except Exception as gen_error:
-                    st.warning(f"Failed to generate question: {gen_error}")
-                    if attempts >= 3:
-                        break
-                    continue
-                    
-            progress_bar.empty()
-            status_text.empty()
+            # Generate unique share link
+            share_link = secrets.token_urlsafe(8)
             
-            if len(self.questions) < num_question:
-                st.warning(f"Generated {len(self.questions)} unique questions out of {num_question} requested.")
-                
-        except Exception as e:
-            st.error(f"Error generating questions: {e}")
-            return False
-        
-        return len(self.questions) > 0
-    
-    def attempt_quiz(self):
-        if not self.questions:
-            st.warning("No questions generated yet!")
-            return False
-        
-        st.header("📝 Quiz Time!")
-        
-        if not self.user_answers:
-            self.user_answers = [None] * len(self.questions)
-        
-        for i, q in enumerate(self.questions):
-            st.subheader(f"Question {i + 1}")
-            st.write(q['question'])
-            
-            selected_option = st.radio(
-                "Choose your answer:",
-                q['options'],
-                key=f"mcq_{i}",
-                index=None if self.user_answers[i] is None else q['options'].index(self.user_answers[i]) if self.user_answers[i] in q['options'] else None
+            # Save quiz to database
+            quiz = Quiz(
+                title=title,
+                topic=topic,
+                difficulty=difficulty,
+                share_link=share_link,
+                questions=questions
             )
-            self.user_answers[i] = selected_option
+            db.session.add(quiz)
+            db.session.commit()
             
-            st.divider()
+            return redirect(url_for('quiz_created', share_link=share_link))
         
-        return True
+        except Exception as e:
+            return render_template('create_quiz.html', error=str(e))
     
-    def calculate_results(self):
-        if not self.questions or not self.user_answers:
-            return False
+    return render_template('create_quiz.html')
+
+@app.route('/quiz-created/<share_link>')
+def quiz_created(share_link):
+    quiz = Quiz.query.filter_by(share_link=share_link).first_or_404()
+    quiz_url = request.host_url + 'quiz/' + share_link
+    return render_template('quiz_created.html', quiz=quiz, quiz_url=quiz_url)
+
+@app.route('/quiz/<share_link>', methods=['GET', 'POST'])
+def take_quiz(share_link):
+    quiz = Quiz.query.filter_by(share_link=share_link).first_or_404()
+    
+    if request.method == 'POST':
+        student_name = request.form.get('student_name')
+        student_email = request.form.get('student_email', '')
         
-        self.results = []
+        # Calculate score
         score = 0
+        answers = []
         
-        for i, (question, user_answer) in enumerate(zip(self.questions, self.user_answers)):
-            correct = user_answer == question['correct_answer']
-            self.results.append({
-                'question_num': i + 1,
+        for i, question in enumerate(quiz.questions):
+            user_answer = request.form.get(f'question_{i}')
+            correct_answer = question['correct_answer']
+            
+            # Normalize both answers for comparison
+            user_normalized = normalize_answer(user_answer)
+            correct_normalized = normalize_answer(correct_answer)
+            
+            # Compare normalized versions
+            is_correct = user_normalized == correct_normalized
+            
+            if is_correct:
+                score += 1
+            
+            # Debug output (optional - remove in production)
+            if app.debug:
+                print(f"Question {i+1}:")
+                print(f"  User: '{user_answer}' -> '{user_normalized}'")
+                print(f"  Correct: '{correct_answer}' -> '{correct_normalized}'")
+                print(f"  Match: {is_correct}")
+            
+            answers.append({
                 'question': question['question'],
                 'user_answer': user_answer,
-                'correct_answer': question['correct_answer'],
-                'correct': correct,
-                'type': 'MCQ'
+                'correct_answer': correct_answer,
+                'is_correct': is_correct
             })
-            
-            if correct:
-                score += 1
         
-        return score, len(self.questions)
-    
-    def display_results(self):
-        score, total = self.calculate_results()
-        if not self.results:
-            st.warning("No results to display!")
-            return
-        
-        percentage = (score / total) * 100
-        
-        st.header("📊 Quiz Results")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Score", f"{score}/{total}")
-        with col2:
-            st.metric("Percentage", f"{percentage:.1f}%")
-        with col3:
-            if percentage >= 80:
-                st.success("Excellent! 🎉")
-            elif percentage >= 60:
-                st.info("Good job! 👍")
-            else:
-                st.warning("Keep practicing! 💪")
-        
-        st.subheader("Detailed Results")
-        
-        for result in self.results:
-            with st.expander(f"Question {result['question_num']} - {'✅ Correct' if result['correct'] else '❌ Incorrect'}"):
-                st.write(f"**Question:** {result['question']}")
-                st.write(f"**Your Answer:** {result['user_answer'] if result['user_answer'] else 'Not answered'}")
-                st.write(f"**Correct Answer:** {result['correct_answer']}")
-                
-                if result['correct']:
-                    st.success("Correct! ✅")
-                else:
-                    st.error("Incorrect ❌")
-
-    def save_quiz_to_cache(self, topic, difficulty):
-        """Save generated quiz to session state cache"""
-        cache_key = f"{topic}_{difficulty}"
-        if 'quiz_cache' not in st.session_state:
-            st.session_state.quiz_cache = {}
-        
-        st.session_state.quiz_cache[cache_key] = {
-            'questions': self.questions,
-            'timestamp': time.time()
-        }
-
-    def load_quiz_from_cache(self, topic, difficulty):
-        """Load quiz from cache if available and recent"""
-        cache_key = f"{topic}_{difficulty}"
-        if 'quiz_cache' not in st.session_state:
-            return False
-        
-        if cache_key in st.session_state.quiz_cache:
-            cached_data = st.session_state.quiz_cache[cache_key]
-            # Use cached data if less than 10 minutes old
-            if time.time() - cached_data['timestamp'] < 600:
-                self.questions = cached_data['questions']
-                self.user_answers = []
-                self.results = []
-                return True
-        
-        return False
-
-
-def main():
-    st.set_page_config(
-        page_title="AI Quiz Generator",
-        page_icon="🧠",
-        layout="wide",
-        initial_sidebar_state="expanded"
-    )
-    
-    st.title("🧠 AI Quiz Generator")
-    st.markdown("Generate and take multiple choice quizzes on any topic using AI!")
-    
-    # Initialize session state
-    if 'quiz_manager' not in st.session_state:
-        st.session_state.quiz_manager = QuizManager()
-    
-    if 'quiz_generated' not in st.session_state:
-        st.session_state.quiz_generated = False
-    
-    if 'quiz_submitted' not in st.session_state:
-        st.session_state.quiz_submitted = False
-    
-    # Enhanced sidebar with increased width
-    with st.sidebar:
-        st.markdown("## ⚙️ Quiz Configuration")
-        
-        if not os.getenv("GOOGLE_API_KEY"):
-            st.error("Please set your GOOGLE_API_KEY in the .env file")
-            st.stop()
-        
-        st.markdown("### 📚 Topic Selection")
-        topic = st.text_input(
-            "Enter Quiz Topic:",
-            placeholder="e.g., Python Programming, World History, Science",
-            help="Enter any topic you want to be quizzed on"
+        # Save attempt
+        attempt = QuizAttempt(
+            quiz_id=quiz.id,
+            student_name=student_name,
+            student_email=student_email,
+            score=score,
+            total_questions=len(quiz.questions),
+            answers=answers
         )
+        db.session.add(attempt)
+        db.session.commit()
         
-        st.markdown("### 🎯 Difficulty Level")
-        difficulty = st.selectbox(
-            "Select Difficulty:",
-            ["Easy", "Medium", "Hard"],
-            help="Choose the difficulty level for your quiz questions"
-        )
+        if app.debug:
+            print(f"Final score: {score}/{len(quiz.questions)}")
+            print(f"Redirecting to results for attempt #{attempt.id}")
         
-        st.markdown("### 🔢 Number of Questions")
-        num_questions = st.slider(
-            "Questions to Generate:",
-            min_value=1,
-            max_value=10,
-            value=5,
-            help="Select how many questions you want in your quiz"
-        )
-        
-        st.markdown("---")
-        
-        # Check if we can generate
-        can_generate = st.session_state.quiz_manager.can_generate_new_quiz()
-        
-        if not can_generate:
-            remaining_time = st.session_state.quiz_manager.min_generation_interval - (time.time() - st.session_state.quiz_manager.last_generation_time)
-            st.warning(f"⏱️ Rate limit: Wait {remaining_time:.1f}s")
-        
-        st.markdown("### 🚀 Generate Quiz")
-        if st.button("🎯 Generate Quiz", type="primary", disabled=not can_generate, use_container_width=True):
-            if not topic:
-                st.error("Please enter a topic!")
-            else:
-                # Check cache first
-                if st.session_state.quiz_manager.load_quiz_from_cache(topic, difficulty):
-                    st.session_state.quiz_generated = True
-                    st.session_state.quiz_submitted = False
-                    st.success("Quiz loaded from cache!")
-                    st.rerun()
-                else:
-                    # Generate new quiz
-                    with st.spinner("Generating quiz questions..."):
-                        try:
-                            generator = QuestionGenerator()
-                            success = st.session_state.quiz_manager.generate_questions(
-                                generator, topic, difficulty, num_questions
-                            )
-                            
-                            if success:
-                                st.session_state.quiz_manager.save_quiz_to_cache(topic, difficulty)
-                                st.session_state.quiz_generated = True
-                                st.session_state.quiz_submitted = False
-                                st.success("Quiz generated successfully!")
-                                st.rerun()
-                            else:
-                                st.error("Failed to generate quiz!")
-                        except Exception as e:
-                            st.error(f"Error: {str(e)}")
-        
-        st.markdown("### 🔄 Reset")
-        if st.button("🔄 Reset Quiz", use_container_width=True):
-            st.session_state.quiz_manager = QuizManager()
-            st.session_state.quiz_generated = False
-            st.session_state.quiz_submitted = False
-            st.rerun()
-        
-        st.markdown("---")
-        st.markdown("### ℹ️ About")
-        st.markdown("""
-        This quiz generator uses AI to create personalized multiple choice questions on any topic.
-        
-        **Features:**
-        - ✅ Multiple choice questions
-        - ✅ Adjustable difficulty
-        - ✅ Instant scoring
-        - ✅ Detailed results
-        """)
+        return redirect(url_for('quiz_results', attempt_id=attempt.id))
     
-    # Main content area
-    if not st.session_state.quiz_generated:
-        st.info("👈 Configure your quiz settings in the sidebar and click 'Generate Quiz' to start!")
-        
-        # Clean, minimal welcome section
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.markdown("""
-            ### 🎯 How to Use
-            1. **Enter a topic** in the sidebar
-            2. **Select difficulty** (Easy, Medium, Hard)
-            3. **Choose number of questions** (1-10)
-            4. **Click 'Generate Quiz'** to create your quiz
-            5. **Answer questions** and submit for results
-            """)
-        
-        with col2:
-            st.markdown("""
-            ### 📊 Features
-            - AI-powered questions
-            - Instant feedback
-            - Score tracking
-            - Multiple difficulty levels
-            """)
+    return render_template('take_quiz.html', quiz=quiz)
+
+@app.route('/results/<int:attempt_id>')
+def quiz_results(attempt_id):
+    attempt = QuizAttempt.query.get_or_404(attempt_id)
+    percentage = (attempt.score / attempt.total_questions) * 100
+    return render_template('results.html', attempt=attempt, percentage=percentage)
+
+@app.route('/my-quizzes')
+def my_quizzes():
+    quizzes = Quiz.query.order_by(Quiz.created_at.desc()).all()
+    return render_template('my_quizzes.html', quizzes=quizzes)
+
+@app.route('/quiz-report/<share_link>')
+def quiz_report(share_link):
+    quiz = Quiz.query.filter_by(share_link=share_link).first_or_404()
+    attempts = QuizAttempt.query.filter_by(quiz_id=quiz.id).order_by(QuizAttempt.completed_at.desc()).all()
     
-    elif not st.session_state.quiz_submitted:
-        st.session_state.quiz_manager.attempt_quiz()
-        
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            if st.button("📤 Submit Quiz", type="primary", use_container_width=True):
-                unanswered = []
-                for i, answer in enumerate(st.session_state.quiz_manager.user_answers):
-                    if answer is None:
-                        unanswered.append(i + 1)
-                
-                if unanswered:
-                    st.warning(f"Please answer all questions! Missing: {', '.join(map(str, unanswered))}")
-                else:
-                    st.session_state.quiz_submitted = True
-                    st.rerun()
-    
+    # Calculate statistics
+    total_attempts = len(attempts)
+    if total_attempts > 0:
+        avg_score = sum(a.score for a in attempts) / total_attempts
+        avg_percentage = (avg_score / len(quiz.questions)) * 100
     else:
-        st.session_state.quiz_manager.display_results()
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔄 Retake Quiz", use_container_width=True):
-                st.session_state.quiz_submitted = False
-                st.session_state.quiz_manager.user_answers = []
-                st.rerun()
-        
-        with col2:
-            if st.button("🎯 Generate New Quiz", use_container_width=True):
-                st.session_state.quiz_manager = QuizManager()
-                st.session_state.quiz_generated = False
-                st.session_state.quiz_submitted = False
-                st.rerun()
+        avg_score = 0
+        avg_percentage = 0
+    
+    return render_template('quiz_report.html', 
+                         quiz=quiz, 
+                         attempts=attempts, 
+                         total_attempts=total_attempts,
+                         avg_percentage=avg_percentage)
 
+@app.route('/delete-quiz/<int:quiz_id>', methods=['POST'])
+def delete_quiz(quiz_id):
+    quiz = Quiz.query.get_or_404(quiz_id)
+    db.session.delete(quiz)
+    db.session.commit()
+    return redirect(url_for('my_quizzes'))
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
