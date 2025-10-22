@@ -1,5 +1,7 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session
+from flask import Flask, render_template, request, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import secrets
 import os
@@ -9,16 +11,48 @@ from generator import QuestionGenerator
 
 load_dotenv()
 
+# Debug: Print to verify env variables are loaded
+print("Environment variables loaded:")
+print(f"DATABASE_URL: {os.getenv('DATABASE_URL')[:50]}..." if os.getenv('DATABASE_URL') else "DATABASE_URL: Not set")
+print(f"SECRET_KEY: {'Set' if os.getenv('SECRET_KEY') else 'Not set'}")
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', secrets.token_hex(16))
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///quiz.db'
+
+# PostgreSQL Configuration
+database_url = os.getenv('DATABASE_URL')
+if database_url and database_url.startswith('postgres://'):
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,
+    'pool_recycle': 300,
+}
 
 db = SQLAlchemy(app)
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
 # Database Models
-class Quiz(db.Model):
+class User(UserMixin, db.Model):
+    __tablename__ = 'user'
+    
     id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+    name = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    quizzes = db.relationship('Quiz', backref='creator', lazy=True, cascade='all, delete-orphan')
+
+class Quiz(db.Model):
+    __tablename__ = 'quiz'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     title = db.Column(db.String(200), nullable=False)
     topic = db.Column(db.String(100), nullable=False)
     difficulty = db.Column(db.String(20), nullable=False)
@@ -28,6 +62,8 @@ class Quiz(db.Model):
     attempts = db.relationship('QuizAttempt', backref='quiz', lazy=True, cascade='all, delete-orphan')
 
 class QuizAttempt(db.Model):
+    __tablename__ = 'quiz_attempt'
+    
     id = db.Column(db.Integer, primary_key=True)
     quiz_id = db.Column(db.Integer, db.ForeignKey('quiz.id'), nullable=False)
     student_name = db.Column(db.String(100), nullable=False)
@@ -37,25 +73,87 @@ class QuizAttempt(db.Model):
     answers = db.Column(db.JSON, nullable=False)
     completed_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+@login_manager.user_loader
+def load_user(user_id):
+    return db.session.get(User, int(user_id))
+
 # Initialize database
 with app.app_context():
     db.create_all()
 
 def normalize_answer(answer):
-    """Normalize answer for comparison by removing extra whitespace and converting to lowercase"""
+    """Normalize answer for comparison"""
     if not answer:
         return ''
-    # Convert to string, strip, and lowercase
     answer = str(answer).strip().lower()
-    # Replace multiple spaces with single space
     answer = re.sub(r'\s+', ' ', answer)
     return answer
 
+# Auth Routes
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        email = request.form.get('email')
+        password = request.form.get('password')
+        name = request.form.get('name')
+        
+        if User.query.filter_by(username=username).first():
+            return render_template('register.html', error='Username already exists')
+        
+        if User.query.filter_by(email=email).first():
+            return render_template('register.html', error='Email already registered')
+        
+        user = User(
+            username=username,
+            email=email,
+            password=generate_password_hash(password),
+            name=name
+        )
+        db.session.add(user)
+        db.session.commit()
+        
+        login_user(user)
+        return redirect(url_for('index'))
+    
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        user = User.query.filter_by(username=username).first()
+        
+        if user and user.password and check_password_hash(user.password, password):
+            login_user(user)
+            next_page = request.args.get('next')
+            return redirect(next_page) if next_page else redirect(url_for('index'))
+        else:
+            return render_template('login.html', error='Invalid username or password')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
+# Main Routes
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/create-quiz', methods=['GET', 'POST'])
+@login_required
 def create_quiz():
     if request.method == 'POST':
         topic = request.form.get('topic')
@@ -75,11 +173,10 @@ def create_quiz():
                     'correct_answer': q.correct_answer
                 })
             
-            # Generate unique share link
             share_link = secrets.token_urlsafe(8)
             
-            # Save quiz to database
             quiz = Quiz(
+                user_id=current_user.id,
                 title=title,
                 topic=topic,
                 difficulty=difficulty,
@@ -97,8 +194,11 @@ def create_quiz():
     return render_template('create_quiz.html')
 
 @app.route('/quiz-created/<share_link>')
+@login_required
 def quiz_created(share_link):
     quiz = Quiz.query.filter_by(share_link=share_link).first_or_404()
+    if quiz.user_id != current_user.id:
+        return redirect(url_for('index'))
     quiz_url = request.host_url + 'quiz/' + share_link
     return render_template('quiz_created.html', quiz=quiz, quiz_url=quiz_url)
 
@@ -110,7 +210,6 @@ def take_quiz(share_link):
         student_name = request.form.get('student_name')
         student_email = request.form.get('student_email', '')
         
-        # Calculate score
         score = 0
         answers = []
         
@@ -118,22 +217,13 @@ def take_quiz(share_link):
             user_answer = request.form.get(f'question_{i}')
             correct_answer = question['correct_answer']
             
-            # Normalize both answers for comparison
             user_normalized = normalize_answer(user_answer)
             correct_normalized = normalize_answer(correct_answer)
             
-            # Compare normalized versions
             is_correct = user_normalized == correct_normalized
             
             if is_correct:
                 score += 1
-            
-            # Debug output (optional - remove in production)
-            if app.debug:
-                print(f"Question {i+1}:")
-                print(f"  User: '{user_answer}' -> '{user_normalized}'")
-                print(f"  Correct: '{correct_answer}' -> '{correct_normalized}'")
-                print(f"  Match: {is_correct}")
             
             answers.append({
                 'question': question['question'],
@@ -142,7 +232,6 @@ def take_quiz(share_link):
                 'is_correct': is_correct
             })
         
-        # Save attempt
         attempt = QuizAttempt(
             quiz_id=quiz.id,
             student_name=student_name,
@@ -153,10 +242,6 @@ def take_quiz(share_link):
         )
         db.session.add(attempt)
         db.session.commit()
-        
-        if app.debug:
-            print(f"Final score: {score}/{len(quiz.questions)}")
-            print(f"Redirecting to results for attempt #{attempt.id}")
         
         return redirect(url_for('quiz_results', attempt_id=attempt.id))
     
@@ -169,16 +254,20 @@ def quiz_results(attempt_id):
     return render_template('results.html', attempt=attempt, percentage=percentage)
 
 @app.route('/my-quizzes')
+@login_required
 def my_quizzes():
-    quizzes = Quiz.query.order_by(Quiz.created_at.desc()).all()
+    quizzes = Quiz.query.filter_by(user_id=current_user.id).order_by(Quiz.created_at.desc()).all()
     return render_template('my_quizzes.html', quizzes=quizzes)
 
 @app.route('/quiz-report/<share_link>')
+@login_required
 def quiz_report(share_link):
     quiz = Quiz.query.filter_by(share_link=share_link).first_or_404()
+    if quiz.user_id != current_user.id:
+        return redirect(url_for('index'))
+    
     attempts = QuizAttempt.query.filter_by(quiz_id=quiz.id).order_by(QuizAttempt.completed_at.desc()).all()
     
-    # Calculate statistics
     total_attempts = len(attempts)
     if total_attempts > 0:
         avg_score = sum(a.score for a in attempts) / total_attempts
@@ -194,11 +283,19 @@ def quiz_report(share_link):
                          avg_percentage=avg_percentage)
 
 @app.route('/delete-quiz/<int:quiz_id>', methods=['POST'])
+@login_required
 def delete_quiz(quiz_id):
     quiz = Quiz.query.get_or_404(quiz_id)
+    if quiz.user_id != current_user.id:
+        return redirect(url_for('index'))
     db.session.delete(quiz)
     db.session.commit()
     return redirect(url_for('my_quizzes'))
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(
+        debug=True, 
+        port=5000,
+        use_reloader=True,
+        extra_files=[]
+    )

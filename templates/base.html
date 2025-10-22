@@ -37,29 +37,37 @@
             color: #2c3e50;
         }
 
+        .navbar-nav {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .navbar nav {
+            display: flex;
+            gap: 2rem;
+        }
+
         .navbar nav a {
-            margin-left: 2rem;
             text-decoration: none;
             color: #555;
             font-weight: 500;
+            transition: color 0.3s;
         }
 
         .navbar nav a:hover {
             color: #3498db;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 2rem auto;
-            padding: 0 2rem;
+        .user-section {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
         }
 
-        .card {
-            background: #fff;
-            border-radius: 8px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        .user-name {
+            color: #2c3e50;
+            font-weight: 500;
         }
 
         .btn {
@@ -101,6 +109,31 @@
             background-color: #c0392b;
         }
 
+        .btn-logout {
+            background-color: #e74c3c;
+            color: white;
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        .btn-logout:hover {
+            background-color: #c0392b;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
         .form-group {
             margin-bottom: 1.5rem;
         }
@@ -127,6 +160,13 @@
         .form-group textarea:focus {
             outline: none;
             border-color: #3498db;
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 0.25rem;
+            color: #999;
+            font-size: 0.9rem;
         }
 
         .alert {
@@ -186,17 +226,132 @@
         .mb-2 {
             margin-bottom: 2rem;
         }
+
+        .divider {
+            position: relative;
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background-color: #ddd;
+        }
+
+        .divider span {
+            position: relative;
+            background-color: #fff;
+            padding: 0 1rem;
+            color: #999;
+        }
+
+        .auth-container {
+            max-width: 400px;
+            margin: 4rem auto;
+        }
+
+        .auth-container h2 {
+            text-align: center;
+            margin-bottom: 2rem;
+            color: #2c3e50;
+        }
+
+        .auth-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .auth-buttons .btn {
+            width: 100%;
+            text-align: center;
+        }
+
+        .google-btn {
+            background-color: #fff;
+            color: #555;
+            border: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
+        }
+
+        .google-btn:hover {
+            background-color: #f8f8f8;
+            border-color: #999;
+        }
+
+        .google-btn img {
+            height: 20px;
+        }
+
+        .auth-link {
+            text-align: center;
+            margin-top: 1.5rem;
+            color: #666;
+        }
+
+        .auth-link a {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .auth-link a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .navbar-nav {
+                flex-direction: column;
+                gap: 1rem;
+                width: 100%;
+            }
+
+            .navbar nav {
+                width: 100%;
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .auth-container {
+                margin: 2rem 1rem;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="navbar">
         <div class="navbar-content">
             <h1>🧠 AI Quiz Generator</h1>
-            <nav>
-                <a href="{{ url_for('index') }}">Home</a>
-                <a href="{{ url_for('create_quiz') }}">Create Quiz</a>
-                <a href="{{ url_for('my_quizzes') }}">My Quizzes</a>
-            </nav>
+            <div class="navbar-nav">
+                {% if current_user.is_authenticated %}
+                    <nav>
+                        <a href="{{ url_for('index') }}">Home</a>
+                        <a href="{{ url_for('create_quiz') }}">Create Quiz</a>
+                        <a href="{{ url_for('my_quizzes') }}">My Quizzes</a>
+                    </nav>
+                    <div class="user-section">
+                        <span class="user-name">{{ current_user.name or current_user.username }}</span>
+                        <a href="{{ url_for('logout') }}" class="btn btn-logout">Logout</a>
+                    </div>
+                {% else %}
+                    <nav>
+                        <a href="{{ url_for('index') }}">Home</a>
+                    </nav>
+                    <div class="user-section">
+                        <a href="{{ url_for('login') }}" class="btn btn-primary">Login</a>
+                        <a href="{{ url_for('register') }}" class="btn btn-secondary">Register</a>
+                    </div>
+                {% endif %}
+            </div>
         </div>
     </div>
 
