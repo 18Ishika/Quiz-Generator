@@ -1,23 +1,8 @@
-# Core Flask
-Flask==3.0.3
-
-# Database and Login
-Flask-SQLAlchemy==3.1.1
-Flask-Login==0.6.3
-
-# Security and utilities
-Werkzeug==3.0.4
-python-dotenv==1.0.1
-psycopg2-binary==2.9.9
-
-# Google Gemini API
-google-generativeai==0.8.3
-
-# Pydantic for validation
-pydantic==2.8.2
-pydantic_core==2.23.4
-
-# Gunicorn for production server (Render needs this)
-gunicorn==23.0.0
-
-# Optional if you're using re, json, os, secrets, etc. (these are standard libs, no need to include)
+Flask
+Flask-SQLAlchemy
+Flask-Login
+psycopg2-binary
+python-dotenv
+google-generativeai
+pydantic
+gunicorn
