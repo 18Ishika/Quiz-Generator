@@ -1,5 +1,7 @@
 QUIZ GENERATOR 🎯
 
+WEBSITE LIVE HERE : https://quiz-generator-1v2t.onrender.com
+
 Quiz Generator is an AI-powered web application that lets users generate and share customized quizzes on any topic in seconds. You can create a quiz, share it via a link, and track who has submitted it — making it perfect for learning, assessments, or fun challenges with friends.
 
 ✨ Features
