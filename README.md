@@ -1,4 +1,4 @@
-QUIZ GENERATOR 🎯
+QUIZ GENERATOR 
 
 WEBSITE LIVE HERE : https://quiz-generator-1v2t.onrender.com
 
@@ -29,6 +29,10 @@ LangChain
 Pydantic
 
 Google Gemini API
+
+Used postgres database from render and established connection 
+
+Deployed on Render
 
 🚀 How to Use
 
