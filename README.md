@@ -47,7 +47,7 @@ View submission reports — who submitted, their answers, and scores.
 Review feedback and results.
 
 
-
+---- Working to enhance the UI and shifting the codebase to Django instead of Flask
 <img width="1362" height="659" alt="image" src="https://github.com/user-attachments/assets/0a761876-2589-4bce-9ac5-9a46cd2455a2" />
 <img width="1231" height="617" alt="image" src="https://github.com/user-attachments/assets/bffe0590-e11e-4e70-80fe-c50321fd416e" />
 <img width="1322" height="628" alt="image" src="https://github.com/user-attachments/assets/ae65f8ca-e389-4769-b002-c0c489eea5b8" />
