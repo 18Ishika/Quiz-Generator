@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: quiz-generator
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app"
+    envVars:
+      - key: SECRET_KEY          # Flask Secret Key
+        generateValue: true
+      - key: DATABASE_URL        # Your Postgres connection string
+        sync: false
+      - key: GOOGLE_API_KEY      # Your Google API key
+        sync: false
