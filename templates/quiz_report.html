@@ -122,7 +122,8 @@
 
     <div style="margin-top: 2rem; padding: 1.5rem; background-color: #f8f9fa; border-radius: 8px;">
         <h4 style="margin-bottom: 1rem;">Score Distribution</h4>
-        <div style="display: flex; gap: 1rem; align-items: end; height: 200px; padding: 1rem 0;">
+        <div style="display: flex; gap: 1rem; align-items: flex-end; height: auto; min-height: 220px; padding: 1rem 0; overflow: visible;">
+
             {% set pass_count = attempts|selectattr('score', 'ge', (quiz.questions|length * 0.6))|list|length %}
             {% set fail_count = attempts|length - pass_count %}
             
