@@ -4,66 +4,104 @@
 
 {% block content %}
 <div class="card">
-    <h2 style="margin-bottom: 1rem; color: #2c3e50;">{{ quiz.title }}</h2>
+    <h2 style="margin-bottom: 1rem; color: #2c3e50;">📝 {{ quiz.title }}</h2>
     
     <div style="background-color: #e8f4f8; padding: 1rem; border-radius: 8px; margin-bottom: 2rem;">
-        <p><strong>Topic:</strong> {{ quiz.topic }}</p>
-        <p><strong>Difficulty:</strong> <span style="text-transform: capitalize;">{{ quiz.difficulty }}</span></p>
-        <p><strong>Questions:</strong> {{ quiz.questions|length }}</p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem;">
+            <div>
+                <strong>Topic:</strong> {{ quiz.topic }}
+            </div>
+            <div>
+                <strong>Difficulty:</strong> <span style="text-transform: capitalize;">{{ quiz.difficulty }}</span>
+            </div>
+            <div>
+                <strong>Questions:</strong> {{ questions|length }}
+            </div>
+        </div>
     </div>
 
-    <form method="POST" action="{{ url_for('take_quiz', share_link=quiz.share_link) }}" id="quizForm">
-        <div style="background-color: #fff3cd; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem;">
-            <h3 style="margin-bottom: 1rem; color: #856404;">Student Information</h3>
+    <form method="POST" id="quizForm">
+        <div style="margin-bottom: 2rem; padding: 1.5rem; background-color: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
+            <h3 style="margin-bottom: 1rem; color: #2c3e50;">Student Information</h3>
             
-            <div class="form-group">
-                <label for="student_name">Your Name *</label>
-                <input type="text" id="student_name" name="student_name" required placeholder="Enter your full name">
+            <div style="margin-bottom: 1rem;">
+                <label for="student_name" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                    Your Name <span style="color: #e74c3c;">*</span>
+                </label>
+                <input 
+                    type="text" 
+                    id="student_name" 
+                    name="student_name" 
+                    required
+                    placeholder="Enter your full name"
+                    style="width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1rem;"
+                >
             </div>
 
-            <div class="form-group">
-                <label for="student_email">Email (Optional)</label>
-                <input type="email" id="student_email" name="student_email" placeholder="your.email@example.com">
+            <div>
+                <label for="student_email" style="display: block; margin-bottom: 0.5rem; font-weight: 500;">
+                    Email (Optional)
+                </label>
+                <input 
+                    type="email" 
+                    id="student_email" 
+                    name="student_email"
+                    placeholder="your.email@example.com"
+                    style="width: 100%; padding: 0.75rem; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 1rem;"
+                >
             </div>
         </div>
 
-        <h3 style="margin-bottom: 1.5rem;">Quiz Questions</h3>
+        <h3 style="margin-bottom: 1.5rem; color: #2c3e50;">Quiz Questions</h3>
 
-        {% for question in quiz.questions %}
-        {% set q_index = loop.index0 %}
-        <div style="margin-bottom: 2rem; padding: 1.5rem; background-color: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
+        {% for i, question in questions|enumerate %}
+        <div style="margin-bottom: 2rem; padding: 1.5rem; background-color: white; border: 2px solid #e0e0e0; border-radius: 8px;">
             <h4 style="margin-bottom: 1rem; color: #2c3e50;">
-                Question {{ loop.index }} of {{ quiz.questions|length }}
+                Question {{ i + 1 }} of {{ questions|length }}
             </h4>
-            <p style="font-size: 1.1rem; margin-bottom: 1rem; font-weight: 500;">
+            <p style="font-size: 1.1rem; margin-bottom: 1.5rem; line-height: 1.6;">
                 {{ question.question }}
             </p>
 
-            <div style="margin-left: 1rem;">
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
                 {% for option in question.options %}
-                <div style="margin-bottom: 0.75rem;">
-                    <label style="display: flex; align-items: center; cursor: pointer; padding: 0.75rem; border-radius: 4px; transition: background-color 0.2s;" 
-                           class="option-label">
-                        <input 
-                            type="radio" 
-                            name="question_{{ q_index }}" 
-                            value="{{ option }}" 
-                            required
-                            style="margin-right: 0.75rem; cursor: pointer;"
-                        >
-                        <span>{{ option }}</span>
-                    </label>
-                </div>
+                <label style="
+                    display: flex;
+                    align-items: center;
+                    padding: 1rem;
+                    background-color: #f8f9fa;
+                    border: 2px solid #e0e0e0;
+                    border-radius: 8px;
+                    cursor: pointer;
+                    transition: all 0.2s;
+                " class="option-label">
+                    <input 
+                        type="radio" 
+                        name="question_{{ i }}" 
+                        value="{{ option }}"
+                        required
+                        style="width: 20px; height: 20px; margin-right: 1rem; cursor: pointer;"
+                    >
+                    <span style="flex: 1;">{{ option }}</span>
+                </label>
                 {% endfor %}
             </div>
         </div>
         {% endfor %}
 
-        <div style="margin-top: 2rem; padding: 1.5rem; background-color: #d1ecf1; border-radius: 8px; text-align: center;">
-            <p style="margin-bottom: 1rem; color: #0c5460;">
-                ⚠️ Make sure you've answered all questions before submitting!
+        <div style="margin-top: 2rem; padding: 1.5rem; background-color: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107;">
+            <p style="margin: 0; color: #856404;">
+                <strong>⚠️ Important:</strong> Make sure you've answered all questions before submitting. 
+                You cannot change your answers after submission.
             </p>
-            <button type="submit" class="btn btn-primary" id="submitBtn" style="font-size: 1.1rem; padding: 1rem 2rem;">
+        </div>
+
+        <div style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: center;">
+            <button 
+                type="submit" 
+                class="btn btn-primary"
+                style="padding: 1rem 3rem; font-size: 1.1rem;"
+            >
                 Submit Quiz
             </button>
         </div>
@@ -72,61 +110,37 @@
 
 <style>
     .option-label:hover {
-        background-color: #e9ecef;
+        background-color: #e3f2fd !important;
+        border-color: #3498db !important;
     }
-    
-    .option-label input[type="radio"]:checked + span {
-        font-weight: 600;
-        color: #3498db;
+
+    .option-label:has(input:checked) {
+        background-color: #d4edda !important;
+        border-color: #28a745 !important;
+    }
+
+    input:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
     }
 </style>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('quizForm');
-    const submitBtn = document.getElementById('submitBtn');
-    
-    form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        if (submitBtn.disabled) return;
-        
-        const studentName = document.getElementById('student_name').value.trim();
-        if (!studentName) {
-            alert('Please enter your name!');
-            document.getElementById('student_name').focus();
-            return;
-        }
-        
-        const totalQuestions = {{ quiz.questions|length }};
-        let unanswered = [];
-        
-        for (let i = 0; i < totalQuestions; i++) {
-            const radios = document.querySelectorAll('input[name="question_' + i + '"]');
-            let answered = false;
-            
-            radios.forEach(function(radio) {
-                if (radio.checked) answered = true;
-            });
-            
-            if (!answered) {
-                unanswered.push(i + 1);
-            }
-        }
-        
-        if (unanswered.length > 0) {
-            alert('Please answer all questions!\n\nUnanswered: Question ' + unanswered.join(', '));
-            return;
-        }
-        
-        if (!confirm('Submit your quiz now?\n\nYou cannot change answers after submission.')) {
-            return;
-        }
-        
-        submitBtn.disabled = true;
-        submitBtn.textContent = '⏳ Submitting...';
-        form.submit();
+    document.getElementById('quizForm').addEventListener('submit', function(e) {
+        const btn = this.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Submitting... Please wait';
+        btn.style.backgroundColor = '#6c757d';
     });
-});
+
+    // Smooth scroll to unanswered questions
+    const radioGroups = {};
+    document.querySelectorAll('input[type="radio"]').forEach(radio => {
+        const name = radio.name;
+        if (!radioGroups[name]) {
+            radioGroups[name] = [];
+        }
+        radioGroups[name].push(radio);
+    });
 </script>
 {% endblock %}

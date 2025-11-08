@@ -57,10 +57,13 @@
     </div>
 
     <div style="margin-bottom: 1.5rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+        <a href="{{ url_for('download_report', share_link=quiz.share_link) }}" class="btn btn-success">
+            📄 Download PDF Report
+        </a>
         <a href="{{ url_for('take_quiz', share_link=quiz.share_link) }}" class="btn btn-primary">
             ✏️ Take Quiz
         </a>
-        <button onclick="copyQuizLink('{{ request.host_url }}quiz/{{ quiz.share_link }}')" class="btn btn-secondary">
+        <button type="button" onclick="copyQuizLink('{{ request.host_url }}quiz/{{ quiz.share_link }}')" class="btn btn-secondary">
             📋 Copy Quiz Link
         </button>
         <a href="{{ url_for('my_quizzes') }}" class="btn btn-secondary">
@@ -162,15 +165,41 @@
 
 <script>
     function copyQuizLink(url) {
-        navigator.clipboard.writeText(url).then(function() {
-            const notification = document.getElementById('copy-notification');
-            notification.style.display = 'block';
-            setTimeout(function() {
-                notification.style.display = 'none';
-            }, 3000);
-        }).catch(function(err) {
-            alert('Failed to copy link: ' + err);
-        });
+        // Create a temporary input element
+        const tempInput = document.createElement('input');
+        tempInput.value = url;
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        tempInput.setSelectionRange(0, 99999); // For mobile devices
+        
+        try {
+            // Try the modern clipboard API first
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(url).then(function() {
+                    showNotification();
+                }).catch(function(err) {
+                    // Fallback to execCommand
+                    document.execCommand('copy');
+                    showNotification();
+                });
+            } else {
+                // Fallback for older browsers
+                document.execCommand('copy');
+                showNotification();
+            }
+        } catch (err) {
+            alert('Failed to copy link. Please copy it manually: ' + url);
+        } finally {
+            document.body.removeChild(tempInput);
+        }
+    }
+    
+    function showNotification() {
+        const notification = document.getElementById('copy-notification');
+        notification.style.display = 'block';
+        setTimeout(function() {
+            notification.style.display = 'none';
+        }, 3000);
     }
 </script>
 {% endblock %}

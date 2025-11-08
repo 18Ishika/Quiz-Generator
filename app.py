@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -8,6 +8,13 @@ import os
 import re
 from dotenv import load_dotenv
 from generator import QuestionGenerator
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter, A4
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from io import BytesIO
 
 load_dotenv()
 
@@ -58,6 +65,7 @@ class Quiz(db.Model):
     difficulty = db.Column(db.String(20), nullable=False)
     share_link = db.Column(db.String(50), unique=True, nullable=False)
     questions = db.Column(db.JSON, nullable=False)
+    shuffle_options = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     attempts = db.relationship('QuizAttempt', backref='quiz', lazy=True, cascade='all, delete-orphan')
 
@@ -88,6 +96,169 @@ def normalize_answer(answer):
     answer = str(answer).strip().lower()
     answer = re.sub(r'\s+', ' ', answer)
     return answer
+
+def create_pdf_report(quiz, attempts):
+    """Create a PDF report for a quiz"""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    
+    # Container for the 'Flowable' objects
+    elements = []
+    
+    # Define styles
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#1a5490'),
+        spaceAfter=30,
+        alignment=TA_CENTER
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=16,
+        textColor=colors.HexColor('#2c5aa0'),
+        spaceAfter=12,
+        spaceBefore=12
+    )
+    
+    # Title
+    elements.append(Paragraph("Quiz Report", title_style))
+    elements.append(Spacer(1, 0.2*inch))
+    
+    # Quiz Information Table
+    quiz_info_data = [
+        ['Quiz Title:', quiz.title],
+        ['Topic:', quiz.topic],
+        ['Difficulty:', quiz.difficulty.capitalize()],
+        ['Total Questions:', str(len(quiz.questions))],
+        ['Created:', quiz.created_at.strftime("%B %d, %Y at %H:%M")],
+    ]
+    
+    quiz_info_table = Table(quiz_info_data, colWidths=[2*inch, 4.5*inch])
+    quiz_info_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#e8f0f7')),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (0, -1), 'RIGHT'),
+        ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 11),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#ccc')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 12),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 12),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    
+    elements.append(quiz_info_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Statistics
+    total_attempts = len(attempts)
+    if total_attempts > 0:
+        avg_score = sum(a.score for a in attempts) / total_attempts
+        avg_percentage = (avg_score / len(quiz.questions)) * 100
+    else:
+        avg_score = 0
+        avg_percentage = 0
+    
+    elements.append(Paragraph("Statistics Overview", heading_style))
+    
+    stats_data = [
+        ['Total Attempts', 'Average Score', 'Average Percentage'],
+        [str(total_attempts), f"{avg_score:.2f} / {len(quiz.questions)}", f"{avg_percentage:.1f}%"]
+    ]
+    
+    stats_table = Table(stats_data, colWidths=[2.2*inch, 2.2*inch, 2.2*inch])
+    stats_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c5aa0')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 1), (-1, -1), 14),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#f0f5fa')),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#ccc')),
+        ('TOPPADDING', (0, 0), (-1, -1), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+    ]))
+    
+    elements.append(stats_table)
+    elements.append(Spacer(1, 0.4*inch))
+    
+    # Student Results
+    if attempts:
+        elements.append(Paragraph("Student Results", heading_style))
+        
+        # Table header
+        results_data = [['#', 'Student Name', 'Email', 'Score', 'Percentage', 'Date & Time']]
+        
+        # Add student data
+        for idx, attempt in enumerate(attempts, 1):
+            percentage = (attempt.score / attempt.total_questions) * 100
+            results_data.append([
+                str(idx),
+                attempt.student_name,
+                attempt.student_email or 'N/A',
+                f"{attempt.score}/{attempt.total_questions}",
+                f"{percentage:.1f}%",
+                attempt.completed_at.strftime("%m/%d/%Y %H:%M")
+            ])
+        
+        results_table = Table(results_data, colWidths=[0.4*inch, 1.8*inch, 1.8*inch, 0.9*inch, 1*inch, 1.3*inch])
+        
+        # Create table style
+        table_style = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2c5aa0')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]
+        
+        # Alternate row colors
+        for i in range(1, len(results_data)):
+            if i % 2 == 0:
+                table_style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#f9f9f9')))
+            else:
+                table_style.append(('BACKGROUND', (0, i), (-1, i), colors.white))
+            
+            # Color code percentages
+            percentage = (attempts[i-1].score / attempts[i-1].total_questions) * 100
+            if percentage >= 80:
+                table_style.append(('TEXTCOLOR', (4, i), (4, i), colors.HexColor('#28a745')))
+                table_style.append(('FONTNAME', (4, i), (4, i), 'Helvetica-Bold'))
+            elif percentage >= 60:
+                table_style.append(('TEXTCOLOR', (4, i), (4, i), colors.HexColor('#007bff')))
+                table_style.append(('FONTNAME', (4, i), (4, i), 'Helvetica-Bold'))
+            elif percentage >= 40:
+                table_style.append(('TEXTCOLOR', (4, i), (4, i), colors.HexColor('#ffc107')))
+                table_style.append(('FONTNAME', (4, i), (4, i), 'Helvetica-Bold'))
+            else:
+                table_style.append(('TEXTCOLOR', (4, i), (4, i), colors.HexColor('#dc3545')))
+                table_style.append(('FONTNAME', (4, i), (4, i), 'Helvetica-Bold'))
+        
+        results_table.setStyle(TableStyle(table_style))
+        elements.append(results_table)
+    else:
+        elements.append(Paragraph("No attempts yet.", styles['Normal']))
+    
+    # Build PDF
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
 
 # Auth Routes
 @app.route('/register', methods=['GET', 'POST'])
@@ -160,13 +331,14 @@ def create_quiz():
         difficulty = request.form.get('difficulty', 'medium')
         num_questions = int(request.form.get('num_questions', 5))
         title = request.form.get('title', f"{topic} Quiz")
+        shuffle_options = request.form.get('shuffle_options') == 'on'
         
         try:
             generator = QuestionGenerator()
             questions = []
             
             for _ in range(num_questions):
-                q = generator.generate_mcq(topic, difficulty.lower())
+                q = generator.generate_mcq(topic, difficulty.lower(), shuffle_options=shuffle_options)
                 questions.append({
                     'question': q.question,
                     'options': q.options,
@@ -183,6 +355,13 @@ def create_quiz():
                 share_link=share_link,
                 questions=questions
             )
+            
+            # Set shuffle_options if column exists
+            try:
+                quiz.shuffle_options = shuffle_options
+            except:
+                pass  # Column doesn't exist yet, skip it
+            
             db.session.add(quiz)
             db.session.commit()
             
@@ -245,7 +424,19 @@ def take_quiz(share_link):
         
         return redirect(url_for('quiz_results', attempt_id=attempt.id))
     
-    return render_template('take_quiz.html', quiz=quiz)
+    # Shuffle options if enabled (for display only)
+    display_questions = []
+    import random
+    for question in quiz.questions:
+        q_copy = question.copy()
+        if quiz.shuffle_options:
+            # Create a copy and shuffle the options
+            options_copy = q_copy['options'].copy()
+            random.shuffle(options_copy)
+            q_copy['options'] = options_copy
+        display_questions.append(q_copy)
+    
+    return render_template('take_quiz.html', quiz=quiz, questions=display_questions)
 
 @app.route('/results/<int:attempt_id>')
 def quiz_results(attempt_id):
@@ -281,6 +472,28 @@ def quiz_report(share_link):
                          attempts=attempts, 
                          total_attempts=total_attempts,
                          avg_percentage=avg_percentage)
+
+@app.route('/download-report/<share_link>')
+@login_required
+def download_report(share_link):
+    quiz = Quiz.query.filter_by(share_link=share_link).first_or_404()
+    if quiz.user_id != current_user.id:
+        return redirect(url_for('index'))
+    
+    attempts = QuizAttempt.query.filter_by(quiz_id=quiz.id).order_by(QuizAttempt.completed_at.desc()).all()
+    
+    # Generate PDF file
+    pdf_file = create_pdf_report(quiz, attempts)
+    
+    # Create filename
+    filename = f"{quiz.title.replace(' ', '_')}_Report_{datetime.now().strftime('%Y%m%d')}.pdf"
+    
+    return send_file(
+        pdf_file,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=filename
+    )
 
 @app.route('/delete-quiz/<int:quiz_id>', methods=['POST'])
 @login_required

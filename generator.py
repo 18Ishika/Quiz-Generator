@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import random
 from dotenv import load_dotenv
 import google.generativeai as genai
 from pydantic import BaseModel, field_validator, Field, ValidationError
@@ -32,6 +33,11 @@ class MCQQuestion(BaseModel):
     @classmethod
     def clean_correct_answer(cls, v):
         return str(v).strip()
+    
+    def shuffle_options(self):
+        """Shuffle the options while keeping track of correct answer"""
+        random.shuffle(self.options)
+        return self
 
 class QuestionGenerator:
     def __init__(self):
@@ -143,7 +149,7 @@ class QuestionGenerator:
             except:
                 raise ValueError(f"JSON parsing failed: {str(e)}. Content: {json_str[:200]}")
     
-    def generate_mcq(self, topic: str, difficulty: str = 'medium') -> MCQQuestion:
+    def generate_mcq(self, topic: str, difficulty: str = 'medium', shuffle_options: bool = False) -> MCQQuestion:
         """Generate MCQ with robust error handling and validation"""
         if not topic or not topic.strip():
             raise ValueError("Topic cannot be empty")
@@ -221,6 +227,10 @@ class QuestionGenerator:
                 if len(unique_options) != 4:
                     raise ValueError("Duplicate options found")
                 
+                # Shuffle options if requested
+                if shuffle_options:
+                    parsed_response.shuffle_options()
+                
                 # Success!
                 print(f"✓ Generated question for '{topic}' (attempt {attempt + 1})")
                 return parsed_response
@@ -245,9 +255,9 @@ class QuestionGenerator:
         
         # All attempts failed, use fallback
         print(f"⚠ All attempts failed. Using fallback question. Last error: {last_error}")
-        return self._create_fallback_mcq(topic, difficulty)
+        return self._create_fallback_mcq(topic, difficulty, shuffle_options)
 
-    def _create_fallback_mcq(self, topic: str, difficulty: str) -> MCQQuestion:
+    def _create_fallback_mcq(self, topic: str, difficulty: str, shuffle_options: bool = False) -> MCQQuestion:
         """Create a reasonable fallback MCQ when API fails"""
         difficulty_desc = {
             'easy': 'basic',
@@ -255,7 +265,7 @@ class QuestionGenerator:
             'hard': 'advanced'
         }.get(difficulty, 'general')
         
-        return MCQQuestion(
+        question = MCQQuestion(
             question=f"Which of the following best describes a {difficulty_desc} aspect of {topic}?",
             options=[
                 f"Fundamental concepts of {topic}",
@@ -265,6 +275,11 @@ class QuestionGenerator:
             ],
             correct_answer=f"Fundamental concepts of {topic}"
         )
+        
+        if shuffle_options:
+            question.shuffle_options()
+        
+        return question
 
     def test_connection(self) -> bool:
         """Test if the AI connection is working"""
@@ -323,14 +338,15 @@ if __name__ == "__main__":
         
         # Test with different topics
         test_cases = [
-            ("Python programming", "easy"),
-            ("World War II", "medium"),
-            ("Quantum Physics", "hard")
+            ("Python programming", "easy", False),
+            ("World War II", "medium", True),
+            ("Quantum Physics", "hard", True)
         ]
         
-        for topic, difficulty in test_cases:
-            print(f"\nGenerating {difficulty} question about '{topic}'...")
-            question = generator.generate_mcq(topic, difficulty)
+        for topic, difficulty, shuffle in test_cases:
+            shuffle_text = "with shuffled options" if shuffle else "without shuffling"
+            print(f"\nGenerating {difficulty} question about '{topic}' {shuffle_text}...")
+            question = generator.generate_mcq(topic, difficulty, shuffle_options=shuffle)
             
             print(f"\nQuestion: {question.question}")
             print("Options:")
