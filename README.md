@@ -14,7 +14,7 @@ Quiz Generator is an AI-powered web application that lets users generate and sha
 
 🔗 Share quiz links with others
 
-📊 Get real-time submission reports with details of who attempted and their scores
+📊 Get real-time submission reports with details of who attempted and their scores in form of pdf to analyse the results of performers.
 
 🖼️ Simple, minimal, and user-friendly interface
 
